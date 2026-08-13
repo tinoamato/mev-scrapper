@@ -1,0 +1,44 @@
+// Mismo esquema que cron/prisma/schema.prisma — ambos servicios apuntan a la misma DB (mev-db).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id             String          @id @default(uuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  expedientesMev ExpedienteMev[]
+
+  @@map("Organization")
+}
+
+model ExpedienteMev {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  numeroExpediente String
+  caratula         String
+  jurisdiccion     String?
+  mevUrl           String?
+
+  fechaUltimoMovimiento  DateTime?
+  tituloUltimoMovimiento String?
+
+  lastCheckedAt   DateTime?
+  hasNewMovements Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, numeroExpediente])
+  @@index([organizationId])
+  @@index([organizationId, jurisdiccion])
+  @@map("ExpedienteMev")
+}

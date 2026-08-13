@@ -1,0 +1,50 @@
+// Esquema mínimo para el monitor MEV standalone.
+// Mismos nombres de tabla/columna que legal-saas (server/prisma/schema.prisma)
+// para que el dump/restore de datos históricos entre 1:1 sin remapear IDs.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id             String          @id @default(uuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  expedientesMev ExpedienteMev[]
+
+  @@map("Organization")
+}
+
+model ExpedienteMev {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  numeroExpediente String
+  caratula         String
+  jurisdiccion     String?
+
+  // Link directo de MEV (procesales.asp?...)
+  mevUrl String?
+
+  // Último movimiento guardado en el sistema
+  fechaUltimoMovimiento  DateTime?
+  tituloUltimoMovimiento String?
+
+  // Control interno
+  lastCheckedAt   DateTime?
+  hasNewMovements Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, numeroExpediente])
+  @@index([organizationId])
+  @@index([organizationId, jurisdiccion])
+  @@map("ExpedienteMev")
+}
