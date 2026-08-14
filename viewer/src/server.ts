@@ -13,9 +13,13 @@ import {
   verifyCsrfToken,
 } from './auth';
 import { loginPage, dashboardPage, errorPage } from './views';
+import { triggerMevCronNow } from './railway';
 
 const prisma = new PrismaClient();
 const app = express();
+
+const CRON_LABEL = process.env.CRON_LABEL || '9:00 AM';
+let lastTriggeredAt: Date | null = null;
 
 // Railway está delante de un proxy TLS — sin esto, `cookie.secure` rechazaría todo.
 app.set('trust proxy', 1);
@@ -89,7 +93,7 @@ app.get('/', requireAuth, async (req, res) => {
     where: { organizationId },
     orderBy: [{ hasNewMovements: 'desc' }, { fechaUltimoMovimiento: 'desc' }],
   });
-  res.type('html').send(dashboardPage({ csrfToken: issueCsrfToken(req), expedientes }));
+  res.type('html').send(dashboardPage({ csrfToken: issueCsrfToken(req), expedientes, cronSchedule: CRON_LABEL }));
 });
 
 app.post('/expedientes/:id/marcar-visto', requireAuth, async (req, res) => {
@@ -121,6 +125,39 @@ app.post('/expedientes', requireAuth, async (req, res) => {
     },
   });
   res.redirect('/');
+});
+
+app.post('/expedientes/:id/eliminar', requireAuth, async (req, res) => {
+  if (!verifyCsrfToken(req)) return res.status(403).type('html').send(errorPage('Sesión inválida'));
+  const organizationId = requireEnv('ORGANIZATION_ID');
+  await prisma.expedienteMev.deleteMany({
+    where: { id: req.params.id, organizationId },
+  });
+  res.redirect('/');
+});
+
+app.post('/trigger', requireAuth, async (req, res) => {
+  if (!verifyCsrfToken(req)) return res.status(403).json({ error: 'Sesión inválida' });
+  try {
+    lastTriggeredAt = new Date();
+    await triggerMevCronNow();
+    res.json({ ok: true });
+  } catch (err) {
+    lastTriggeredAt = null;
+    res.status(502).json({ error: err instanceof Error ? err.message : 'Error al disparar el chequeo' });
+  }
+});
+
+app.get('/trigger-status', requireAuth, async (_req, res) => {
+  if (!lastTriggeredAt) return res.json({ done: true });
+  const organizationId = requireEnv('ORGANIZATION_ID');
+  const latest = await prisma.expedienteMev.aggregate({
+    where: { organizationId },
+    _max: { lastCheckedAt: true },
+  });
+  const done = !!latest._max.lastCheckedAt && latest._max.lastCheckedAt > lastTriggeredAt;
+  if (done) lastTriggeredAt = null;
+  res.json({ done });
 });
 
 app.get('/health', (_req, res) => res.status(200).send('ok'));
