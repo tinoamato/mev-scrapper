@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { checkExpedientes } from './mev-runner';
+import { checkExpedientes, type MevScrapeResult } from './mev-runner';
+import { checkExpedientesHttp } from './mev-http-check';
+import { compararResultados, enviarAlertaVerificacion } from './verificacion';
 import { sendMovementsEmail, sendWeeklyDigestEmail } from './resend';
 
 /**
@@ -8,11 +10,20 @@ import { sendMovementsEmail, sendWeeklyDigestEmail } from './resend';
  * - una sola organización (ORGANIZATION_ID), no hace falta el loop multi-org
  * - sin NestJS/DI, sin audit log, sin polling por minuto: el disparo lo hace
  *   el cron nativo de Railway, este script corre una vez y termina (exit 0).
+ *
+ * MEV_CHECK_MODE controla cómo se lee MEV:
+ *   selenium  método original (Python + Selenium + Chromium). ~18 min.
+ *   verify    corre los DOS y compara; Selenium sigue siendo la fuente de verdad
+ *             para escribir en la base, y se alerta por mail si difieren. (default)
+ *   http      solo el método nuevo. ~10 s, sin Chromium.
  */
+type Modo = 'selenium' | 'verify' | 'http';
+
 async function main() {
   const organizationId = requireEnv('ORGANIZATION_ID');
   const username = requireEnv('MEV_USERNAME');
   const password = requireEnv('MEV_PASSWORD');
+  const modo = (process.env.MEV_CHECK_MODE || 'verify') as Modo;
 
   const prisma = new PrismaClient();
 
@@ -27,14 +38,16 @@ async function main() {
       return;
     }
 
-    console.log(`[mev-check] Chequeando ${expedientes.length} expediente(s)...`);
+    console.log(`[mev-check] Chequeando ${expedientes.length} expediente(s) — modo "${modo}"...`);
     const startedAt = Date.now();
 
-    const scrapeResults = await checkExpedientes(
-      username,
-      password,
-      expedientes.map((e) => ({ id: e.id, numeroExpediente: e.numeroExpediente, url: e.mevUrl })),
-    );
+    const entrada = expedientes.map((e) => ({
+      id: e.id,
+      numeroExpediente: e.numeroExpediente,
+      url: e.mevUrl,
+    }));
+
+    const scrapeResults = await obtenerResultados(modo, username, password, entrada);
 
     const byId = new Map(scrapeResults.map((r) => [r.id, r]));
     const now = new Date();
@@ -107,6 +120,76 @@ async function main() {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/**
+ * Ejecuta el/los método(s) según el modo y devuelve los resultados que se van a
+ * escribir en la base. En "verify" corre los dos: primero HTTP (10s) y después
+ * Selenium (18min), compara, alerta si difieren, y devuelve los de Selenium —
+ * el método viejo sigue mandando hasta que la verificación demuestre que el
+ * nuevo es equivalente.
+ */
+async function obtenerResultados(
+  modo: Modo,
+  username: string,
+  password: string,
+  entrada: { id: string; numeroExpediente: string; url: string | null }[],
+): Promise<MevScrapeResult[]> {
+  if (modo === 'selenium') {
+    return checkExpedientes(username, password, entrada);
+  }
+
+  if (modo === 'http') {
+    const t0 = Date.now();
+    const { resultados, problemas } = await checkExpedientesHttp(username, password, entrada);
+    console.log(`[mev-check] HTTP: ${resultados.length} leídos en ${((Date.now() - t0) / 1000).toFixed(1)}s.`);
+    if (problemas.length) {
+      console.warn(`[mev-check] ${problemas.length} expediente(s) con problemas:`);
+      for (const p of problemas) console.warn(`  - ${p.numeroExpediente}: ${p.motivo}${p.detalle ? ` (${p.detalle})` : ''}`);
+    }
+    return resultados;
+  }
+
+  // modo verify
+  const tHttp = Date.now();
+  let httpResultados: Awaited<ReturnType<typeof checkExpedientesHttp>>['resultados'] = [];
+  let httpProblemas: Awaited<ReturnType<typeof checkExpedientesHttp>>['problemas'] = [];
+  try {
+    const r = await checkExpedientesHttp(username, password, entrada);
+    httpResultados = r.resultados;
+    httpProblemas = r.problemas;
+  } catch (e) {
+    // El método nuevo no debe poder romper el chequeo: si falla, se sigue con Selenium.
+    console.error('[mev-check] El método HTTP falló entero, se continúa solo con Selenium:', e);
+  }
+  const msHttp = Date.now() - tHttp;
+  console.log(`[mev-check] HTTP: ${httpResultados.length} leídos en ${(msHttp / 1000).toFixed(1)}s.`);
+
+  const tSel = Date.now();
+  const seleniumResultados = await checkExpedientes(username, password, entrada);
+  const msSelenium = Date.now() - tSel;
+  console.log(`[mev-check] Selenium: ${seleniumResultados.length} leídos en ${(msSelenium / 1000).toFixed(1)}s.`);
+
+  const discrepancias = compararResultados(seleniumResultados, httpResultados, entrada);
+  if (discrepancias.length === 0 && httpProblemas.length === 0) {
+    console.log(`[mev-check] ✓ Verificación cruzada OK: los dos métodos coinciden en ${seleniumResultados.length}/${seleniumResultados.length}.`);
+  } else {
+    console.warn(`[mev-check] ⚠ ${discrepancias.length} discrepancia(s) y ${httpProblemas.length} problema(s). Se usa el resultado de Selenium.`);
+    for (const d of discrepancias) {
+      console.warn(`  - ${d.numeroExpediente} [${d.tipo}] selenium=${JSON.stringify(d.selenium)} http=${JSON.stringify(d.http)}`);
+    }
+    try {
+      await enviarAlertaVerificacion(discrepancias, httpProblemas, {
+        totalExpedientes: entrada.length,
+        msSelenium,
+        msHttp,
+      });
+    } catch (e) {
+      console.error('[mev-check] No se pudo enviar la alerta de verificación:', e);
+    }
+  }
+
+  return seleniumResultados;
 }
 
 function isMondayInArgentina(): boolean {
