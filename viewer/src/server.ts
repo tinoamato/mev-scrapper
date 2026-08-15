@@ -1,7 +1,10 @@
+import path from 'node:path';
 import express from 'express';
 import session from 'express-session';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { Pool } from 'pg';
+import connectPgSimple from 'connect-pg-simple';
 import { PrismaClient } from '@prisma/client';
 import {
   isLockedOut,
@@ -25,18 +28,25 @@ let lastTriggeredAt: Date | null = null;
 app.set('trust proxy', 1);
 
 app.use(helmet());
+app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(express.urlencoded({ extended: false }));
+
+const PgSession = connectPgSimple(session);
+const sessionPool = new Pool({ connectionString: requireEnv('DATABASE_URL') });
+
 app.use(
   session({
+    store: new PgSession({ pool: sessionPool, tableName: 'session', createTableIfMissing: true }),
     name: 'mev.sid',
     secret: requireEnv('SESSION_SECRET'),
     resave: false,
     saveUninitialized: false,
+    rolling: true, // cada visita renueva el vencimiento — mientras entres al menos 1 vez cada 90 días, no te vuelve a pedir login
     cookie: {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
-      maxAge: 12 * 60 * 60 * 1000,
+      maxAge: 90 * 24 * 60 * 60 * 1000,
     },
   }),
 );

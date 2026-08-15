@@ -139,8 +139,9 @@ const THEME_STYLE = `
   .center { text-align: center; }
 `;
 
-function layout(title: string, body: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>${THEME_STYLE}</style></head><body><div class="wrap">${body}</div></body></html>`;
+function layout(title: string, body: string, opts?: { csrfToken?: string }): string {
+  const dataCsrf = opts?.csrfToken ? ` data-csrf="${escapeHtml(opts.csrfToken)}"` : '';
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>${THEME_STYLE}</style></head><body${dataCsrf}><div class="wrap">${body}</div><script src="/app.js" defer></script></body></html>`;
 }
 
 function logoSvg(size = 28): string {
@@ -220,7 +221,7 @@ export function dashboardPage(opts: {
               <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
               <button type="submit" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">Marcar visto</button>
             </form>` : ''}
-          <form method="post" action="/expedientes/${e.id}/eliminar" style="display:inline;" onsubmit="return confirm('¿Eliminar este expediente del seguimiento?')">
+          <form method="post" action="/expedientes/${e.id}/eliminar" style="display:inline;" class="js-confirm-delete">
             <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
             <button type="submit" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">Eliminar</button>
           </form>
@@ -247,8 +248,8 @@ export function dashboardPage(opts: {
       </div>
       <div class="actions">
         <button type="button" class="btn btn-ghost" title="El horario se configura desde Railway">Chequeo automático · ${escapeHtml(opts.cronSchedule)}</button>
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('add-dialog').showModal()">+ Agregar expediente</button>
-        <button type="button" class="btn btn-primary" id="refresh-btn" onclick="triggerRefresh()">↻ Actualizar desde MEV</button>
+        <button type="button" class="btn btn-secondary" id="open-add-dialog">+ Agregar expediente</button>
+        <button type="button" class="btn btn-primary" id="refresh-btn">↻ Actualizar desde MEV</button>
       </div>
     </div>
 
@@ -258,7 +259,7 @@ export function dashboardPage(opts: {
           <p class="card-title" style="margin:0;">Expedientes guardados</p>
           <p class="card-desc">Se actualizan con "Actualizar desde MEV" o solos, todos los días</p>
         </div>
-        <input type="text" id="filter-input" placeholder="Filtrar por carátula o número..." style="max-width:280px;" oninput="filterRows()" />
+        <input type="text" id="filter-input" placeholder="Filtrar por carátula o número..." style="max-width:280px;" />
       </div>
       <div style="overflow-x:auto;">
         <table id="exp-table">
@@ -279,7 +280,7 @@ export function dashboardPage(opts: {
           <div class="field"><label>Jurisdicción (opcional)</label><input type="text" name="jurisdiccion" /></div>
           <div class="field"><label>URL de MEV (opcional)</label><input type="text" name="mevUrl" placeholder="procesales.asp?..." /></div>
           <div class="dialog-actions">
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('add-dialog').close()">Cancelar</button>
+            <button type="button" class="btn btn-secondary" id="close-add-dialog">Cancelar</button>
             <button type="submit" class="btn btn-primary">Agregar</button>
           </div>
         </form>
@@ -293,59 +294,12 @@ export function dashboardPage(opts: {
         <div class="spinner" id="refresh-spinner"></div>
         <p class="muted" id="refresh-detail">Este proceso puede tardar unos minutos.</p>
         <div class="dialog-actions" id="refresh-close-wrap" style="display:none;">
-          <button type="button" class="btn btn-primary" onclick="location.reload()">Ver resultados</button>
+          <button type="button" class="btn btn-primary" id="refresh-view-results">Ver resultados</button>
         </div>
       </div>
     </dialog>
-
-    <script>
-      function filterRows() {
-        const q = document.getElementById('filter-input').value.trim().toLowerCase();
-        document.querySelectorAll('#exp-table tbody tr').forEach((tr) => {
-          tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
-        });
-      }
-
-      async function triggerRefresh() {
-        const dialog = document.getElementById('refresh-dialog');
-        const status = document.getElementById('refresh-status');
-        const spinner = document.getElementById('refresh-spinner');
-        const detail = document.getElementById('refresh-detail');
-        const closeWrap = document.getElementById('refresh-close-wrap');
-        closeWrap.style.display = 'none';
-        spinner.style.display = 'block';
-        status.textContent = 'Conectando con MEV...';
-        detail.textContent = 'Este proceso puede tardar unos minutos.';
-        dialog.showModal();
-
-        const res = await fetch('/trigger', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: '_csrf=' + encodeURIComponent('${opts.csrfToken}'),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          spinner.style.display = 'none';
-          status.textContent = 'No se pudo disparar el chequeo';
-          detail.textContent = body.error || 'Probá de nuevo en unos minutos.';
-          closeWrap.style.display = 'flex';
-          return;
-        }
-
-        status.textContent = 'Revisando expedientes en MEV...';
-        const poll = setInterval(async () => {
-          const s = await fetch('/trigger-status').then((r) => r.json());
-          if (s.done) {
-            clearInterval(poll);
-            spinner.style.display = 'none';
-            status.textContent = 'Listo';
-            detail.textContent = 'Se actualizaron los expedientes.';
-            closeWrap.style.display = 'flex';
-          }
-        }, 15000);
-      }
-    </script>
     `,
+    { csrfToken: opts.csrfToken },
   );
 }
 
