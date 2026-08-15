@@ -10,6 +10,12 @@ export type MevScrapeResult = {
   caratula?: string;
 };
 
+export type MevSearchResult = {
+  caratula: string;
+  url: string;
+  numeroExpediente?: string;
+};
+
 type ExpedienteInput = { id: string; numeroExpediente: string; url: string | null };
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -33,14 +39,15 @@ function getPythonCommand(): string {
 
 /**
  * Invoca el mismo scripts/mev_scraper.py de legal-saas (copiado verbatim) vía stdin/stdout JSON.
- * Puerto directo de MevService.executePython, sin el límite de concurrencia (acá solo corre 1 proceso)
- * ni el manejo de cancelación por request (no aplica a un cron de un solo shot).
+ * Puerto directo de MevService.executePython, sin el límite de concurrencia (acá cada acción es
+ * un proceso propio, y run-mev-check/search-server no corren búsquedas concurrentes entre sí
+ * porque son servicios separados) ni el manejo de cancelación por request.
  */
-async function runMevScraper(input: unknown): Promise<MevScrapeResult[]> {
+async function runMevAction<T>(input: unknown, idleTimeoutMs?: number): Promise<T> {
   const scriptPath = getScriptPath();
   const pythonCmd = getPythonCommand();
 
-  return new Promise<MevScrapeResult[]>((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     const isWindows = process.platform === 'win32';
     const child = spawn(pythonCmd, [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -51,7 +58,7 @@ async function runMevScraper(input: unknown): Promise<MevScrapeResult[]> {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
 
-    const idleTimeoutMs = Number(process.env.MEV_CHECK_IDLE_TIMEOUT_MS) || DEFAULT_IDLE_TIMEOUT_MS;
+    const effectiveIdleTimeoutMs = idleTimeoutMs ?? (Number(process.env.MEV_CHECK_IDLE_TIMEOUT_MS) || DEFAULT_IDLE_TIMEOUT_MS);
     let lastActivityAt = Date.now();
     let settled = false;
 
@@ -70,12 +77,12 @@ async function runMevScraper(input: unknown): Promise<MevScrapeResult[]> {
     };
 
     const idleWatchdog = setInterval(() => {
-      if (Date.now() - lastActivityAt <= idleTimeoutMs) return;
+      if (Date.now() - lastActivityAt <= effectiveIdleTimeoutMs) return;
       killProcess();
-      settleReject(new Error(`Timeout por inactividad del scraper MEV (sin salida por ${Math.ceil(idleTimeoutMs / 60000)} min)`));
+      settleReject(new Error(`Timeout por inactividad del scraper MEV (sin salida por ${Math.ceil(effectiveIdleTimeoutMs / 60000)} min)`));
     }, IDLE_WATCHDOG_TICK_MS);
 
-    const settleResolve = (value: MevScrapeResult[]) => {
+    const settleResolve = (value: T) => {
       if (settled) return;
       settled = true;
       clearInterval(idleWatchdog);
@@ -107,8 +114,8 @@ async function runMevScraper(input: unknown): Promise<MevScrapeResult[]> {
         return;
       }
       try {
-        const parsed = stdout ? JSON.parse(stdout) : [];
-        settleResolve(Array.isArray(parsed) ? parsed : []);
+        const parsed = stdout ? JSON.parse(stdout) : null;
+        settleResolve(parsed as T);
       } catch (e) {
         settleReject(new Error(`Salida inválida del scraper MEV: ${String(e)}`));
       }
@@ -125,10 +132,43 @@ export async function checkExpedientes(
   expedientes: ExpedienteInput[],
 ): Promise<MevScrapeResult[]> {
   if (expedientes.length === 0) return [];
-  return runMevScraper({
+  const result = await runMevAction<MevScrapeResult[]>({
     username,
     password,
     action: 'check_last_movement',
     expedientes,
   });
+  return Array.isArray(result) ? result : [];
+}
+
+const CATALOG_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+export async function catalogDepartamentos(username: string, password: string): Promise<string[]> {
+  const result = await runMevAction<string[]>(
+    { username, password, action: 'catalog_departamentos' },
+    CATALOG_IDLE_TIMEOUT_MS,
+  );
+  return Array.isArray(result) ? result : [];
+}
+
+export async function catalogJuzgados(username: string, password: string, departamento: string): Promise<string[]> {
+  const result = await runMevAction<string[]>(
+    { username, password, action: 'catalog_juzgados', departamento },
+    CATALOG_IDLE_TIMEOUT_MS,
+  );
+  return Array.isArray(result) ? result : [];
+}
+
+export async function searchByCaratula(
+  username: string,
+  password: string,
+  departamento: string,
+  juzgado: string,
+  query: string,
+): Promise<MevSearchResult[]> {
+  const result = await runMevAction<MevSearchResult[]>(
+    { username, password, action: 'search_by_caratula', departamento, juzgado, query },
+    CATALOG_IDLE_TIMEOUT_MS,
+  );
+  return Array.isArray(result) ? result : [];
 }

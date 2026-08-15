@@ -378,21 +378,64 @@ export function dashboardPage(opts: {
       </div>
     </div>
 
-    <dialog id="add-dialog">
+    <dialog id="add-dialog" style="max-width:560px;">
       <div class="dialog-body">
-        <p class="dialog-title">Agregar expediente</p>
-        <p class="card-desc" style="margin-bottom:18px;">Se suma a la lista que revisa el chequeo diario.</p>
-        <form method="post" action="/expedientes">
+        <p class="dialog-title">Buscar expediente en MEV</p>
+        <p class="card-desc" id="wizard-subtitle" style="margin-bottom:18px;">Conectando con MEV...</p>
+
+        <div id="wizard-loading" class="center">
+          <div class="spinner"></div>
+        </div>
+
+        <div id="wizard-error" style="display:none;">
+          <p class="error" id="wizard-error-msg"></p>
+        </div>
+
+        <div id="wizard-form" style="display:none;">
+          <div class="field">
+            <label>Departamento</label>
+            <select id="wizard-departamento"><option value="">Seleccioná un departamento</option></select>
+          </div>
+          <div class="field">
+            <label>Juzgado</label>
+            <select id="wizard-juzgado" disabled><option value="">Primero seleccioná departamento</option></select>
+          </div>
+          <div class="field">
+            <label>Carátula (mínimo 3 caracteres)</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="wizard-query" placeholder="Apellido, nombre..." disabled />
+              <button type="button" class="btn btn-secondary" id="wizard-search-btn" disabled>Buscar</button>
+            </div>
+          </div>
+          <div id="wizard-results"></div>
+        </div>
+
+        <p class="muted" style="margin-top:16px;">
+          <a href="#" class="icon-link" id="toggle-manual">o cargar manualmente sin buscar</a>
+        </p>
+
+        <form method="post" action="/expedientes" id="manual-form" style="display:none;margin-top:12px;">
           <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
           <div class="field"><label>Número de expediente</label><input type="text" name="numeroExpediente" required /></div>
           <div class="field"><label>Carátula</label><input type="text" name="caratula" required /></div>
           <div class="field"><label>Jurisdicción (opcional)</label><input type="text" name="jurisdiccion" /></div>
           <div class="field"><label>URL de MEV (opcional)</label><input type="text" name="mevUrl" placeholder="procesales.asp?..." /></div>
           <div class="dialog-actions">
-            <button type="button" class="btn btn-secondary" id="close-add-dialog">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Agregar</button>
+            <button type="submit" class="btn btn-primary">Agregar manualmente</button>
           </div>
         </form>
+
+        <form method="post" action="/expedientes/from-search" id="from-search-form" style="display:none;">
+          <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
+          <input type="hidden" name="caratula" id="from-search-caratula" />
+          <input type="hidden" name="mevUrl" id="from-search-url" />
+          <input type="hidden" name="departamento" id="from-search-departamento" />
+          <input type="hidden" name="numeroExpediente" id="from-search-numero" />
+        </form>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" id="close-add-dialog">Cerrar</button>
+        </div>
       </div>
     </dialog>
 

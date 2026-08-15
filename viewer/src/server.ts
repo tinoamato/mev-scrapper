@@ -17,6 +17,7 @@ import {
 } from './auth';
 import { loginPage, dashboardPage, errorPage } from './views';
 import { triggerMevCronNow } from './railway';
+import { fetchDepartamentos, fetchJuzgados, search as searchMev } from './mevSearch';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -145,6 +146,66 @@ app.post('/expedientes', requireAuth, async (req, res) => {
     },
   });
   res.redirect('/');
+});
+
+app.post('/expedientes/from-search', requireAuth, async (req, res) => {
+  if (!verifyCsrfToken(req)) return res.status(403).type('html').send(errorPage('Sesión inválida'));
+  const organizationId = requireEnv('ORGANIZATION_ID');
+  const { caratula, mevUrl, departamento, numeroExpediente } = req.body as Record<string, string>;
+
+  if (!caratula?.trim() || !mevUrl?.trim()) {
+    return res.status(400).type('html').send(errorPage('Faltan datos del resultado seleccionado'));
+  }
+
+  // Igual que legal-saas: si MEV no devolvió número de expediente, generamos uno
+  // temporal único en vez de dejarlo vacío (rompería el @@unique del schema).
+  let numero = numeroExpediente?.trim();
+  if (!numero || numero === '-' || numero === '--') {
+    numero = `PENDIENTE-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  }
+
+  await prisma.expedienteMev.create({
+    data: {
+      organizationId,
+      numeroExpediente: numero,
+      caratula: caratula.trim(),
+      jurisdiccion: departamento?.trim() || null,
+      mevUrl: mevUrl.trim(),
+    },
+  });
+  res.redirect('/');
+});
+
+app.get('/mev/departamentos', requireAuth, async (_req, res) => {
+  try {
+    res.json({ departamentos: await fetchDepartamentos() });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : 'Error consultando MEV' });
+  }
+});
+
+app.get('/mev/juzgados', requireAuth, async (req, res) => {
+  const departamento = String(req.query.departamento || '').trim();
+  if (!departamento) return res.status(400).json({ error: 'Falta departamento' });
+  try {
+    res.json({ juzgados: await fetchJuzgados(departamento) });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : 'Error consultando MEV' });
+  }
+});
+
+app.get('/mev/search', requireAuth, async (req, res) => {
+  const departamento = String(req.query.departamento || '').trim();
+  const juzgado = String(req.query.juzgado || '').trim();
+  const query = String(req.query.query || '').trim();
+  if (!departamento || !juzgado || query.length < 3) {
+    return res.status(400).json({ error: 'Faltan parámetros de búsqueda' });
+  }
+  try {
+    res.json({ results: await searchMev(departamento, juzgado, query) });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : 'Error consultando MEV' });
+  }
 });
 
 app.post('/expedientes/:id/eliminar', requireAuth, async (req, res) => {
