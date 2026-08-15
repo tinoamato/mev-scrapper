@@ -1,15 +1,48 @@
 (function () {
   const csrfToken = document.body.getAttribute('data-csrf') || '';
 
-  const filterInput = document.getElementById('filter-input');
-  if (filterInput) {
-    filterInput.addEventListener('input', () => {
-      const q = filterInput.value.trim().toLowerCase();
-      document.querySelectorAll('#exp-table tbody tr').forEach((tr) => {
-        tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
+  function applyFilters() {
+    const textInput = document.getElementById('filter-input');
+    const jurisSelect = document.getElementById('filter-jurisdiccion');
+    const q = textInput ? textInput.value.trim().toLowerCase() : '';
+    const j = jurisSelect ? jurisSelect.value : '';
+    document.querySelectorAll('#exp-table tbody tr').forEach((tr) => {
+      const matchesText = !q || tr.textContent.toLowerCase().includes(q);
+      const matchesJuris = !j || tr.getAttribute('data-jurisdiccion') === j;
+      tr.style.display = matchesText && matchesJuris ? '' : 'none';
     });
   }
+
+  const filterInput = document.getElementById('filter-input');
+  const filterJuris = document.getElementById('filter-jurisdiccion');
+  if (filterInput) filterInput.addEventListener('input', applyFilters);
+  if (filterJuris) filterJuris.addEventListener('change', applyFilters);
+
+  // Orden por columna: click en un <th class="sortable"> reordena las filas del <tbody>.
+  document.querySelectorAll('#exp-table th.sortable').forEach((th) => {
+    let dir = 1;
+    th.addEventListener('click', () => {
+      const colIndex = Number(th.getAttribute('data-sort'));
+      const tbody = document.querySelector('#exp-table tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+
+      document.querySelectorAll('#exp-table th.sortable').forEach((t) => t.classList.remove('active'));
+      th.classList.add('active');
+      th.querySelector('.arrow').textContent = dir === 1 ? '↑' : '↓';
+
+      rows.sort((a, b) => {
+        const cellA = a.children[colIndex];
+        const cellB = b.children[colIndex];
+        const valA = (cellA.getAttribute('data-value') ?? cellA.textContent).trim().toLowerCase();
+        const valB = (cellB.getAttribute('data-value') ?? cellB.textContent).trim().toLowerCase();
+        if (valA < valB) return -1 * dir;
+        if (valA > valB) return 1 * dir;
+        return 0;
+      });
+      rows.forEach((r) => tbody.appendChild(r));
+      dir *= -1;
+    });
+  });
 
   const addDialog = document.getElementById('add-dialog');
   const openAddBtn = document.getElementById('open-add-dialog');

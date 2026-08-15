@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { checkExpedientes } from './mev-runner';
-import { sendMovementsEmail } from './resend';
+import { sendMovementsEmail, sendWeeklyDigestEmail } from './resend';
 
 /**
  * Entrypoint standalone para el Railway Cron Job.
@@ -82,9 +82,39 @@ async function main() {
       await sendMovementsEmail(updated);
       console.log(`[mev-check] Mail enviado a ${process.env.NOTIFY_EMAIL}.`);
     }
+
+    if (isMondayInArgentina()) {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const weekly = await prisma.expedienteMev.findMany({
+        where: { organizationId, fechaUltimoMovimiento: { gte: sevenDaysAgo } },
+        orderBy: [{ fechaUltimoMovimiento: 'desc' }],
+      });
+
+      if (weekly.length > 0) {
+        await sendWeeklyDigestEmail(
+          weekly.map((e) => ({
+            numeroExpediente: e.numeroExpediente,
+            caratula: e.caratula,
+            fechaUltimoMovimiento: e.fechaUltimoMovimiento as Date,
+            tituloUltimoMovimiento: e.tituloUltimoMovimiento,
+          })),
+        );
+        console.log(`[mev-check] Resumen semanal enviado (${weekly.length} expediente(s)).`);
+      } else {
+        console.log('[mev-check] Lunes sin movimientos en los últimos 7 días, no se manda resumen semanal.');
+      }
+    }
   } finally {
     await prisma.$disconnect();
   }
+}
+
+function isMondayInArgentina(): boolean {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    weekday: 'short',
+  }).format(new Date());
+  return weekday === 'Mon';
 }
 
 function requireEnv(name: string): string {

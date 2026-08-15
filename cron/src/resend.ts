@@ -5,7 +5,7 @@ type MovementEmailItem = {
   tituloUltimoMovimiento: string | null;
 };
 
-export async function sendMovementsEmail(items: MovementEmailItem[]): Promise<void> {
+async function sendEmail(subject: string, heading: string, items: MovementEmailItem[]): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   const fromName = process.env.RESEND_FROM_NAME || 'MEV Monitor';
@@ -30,7 +30,7 @@ export async function sendMovementsEmail(items: MovementEmailItem[]): Promise<vo
 
   const html = `
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;">
-      <h2>Movimientos detectados en MEV (${items.length})</h2>
+      <h2>${escapeHtml(heading)} (${items.length})</h2>
       <table style="border-collapse:collapse;width:100%;font-size:14px;">
         <thead>
           <tr style="text-align:left;background:#f4f4f4;">
@@ -53,7 +53,7 @@ export async function sendMovementsEmail(items: MovementEmailItem[]): Promise<vo
     body: JSON.stringify({
       from: `${fromName} <${from}>`,
       to: [to],
-      subject: `MEV: ${items.length} expediente(s) con movimientos nuevos`,
+      subject,
       html,
     }),
   });
@@ -62,6 +62,20 @@ export async function sendMovementsEmail(items: MovementEmailItem[]): Promise<vo
     const body = await res.text().catch(() => '');
     throw new Error(`Resend respondió ${res.status}: ${body.slice(0, 500)}`);
   }
+}
+
+/** Mail del día — solo se manda si el chequeo de hoy encontró movimientos nuevos. */
+export async function sendMovementsEmail(items: MovementEmailItem[]): Promise<void> {
+  await sendEmail(`MEV: ${items.length} expediente(s) con movimientos nuevos`, 'Movimientos detectados en MEV', items);
+}
+
+/** Resumen semanal — se manda todos los lunes con lo que tuvo movimiento en los últimos 7 días, haya o no novedad ese día puntual. */
+export async function sendWeeklyDigestEmail(items: MovementEmailItem[]): Promise<void> {
+  await sendEmail(
+    `MEV: resumen semanal — ${items.length} expediente(s) con movimientos esta semana`,
+    'Resumen semanal de MEV',
+    items,
+  );
 }
 
 function escapeHtml(s: string): string {

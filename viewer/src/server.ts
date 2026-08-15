@@ -116,6 +116,16 @@ app.post('/expedientes/:id/marcar-visto', requireAuth, async (req, res) => {
   res.redirect('/');
 });
 
+app.post('/expedientes/marcar-todos-vistos', requireAuth, async (req, res) => {
+  if (!verifyCsrfToken(req)) return res.status(403).type('html').send(errorPage('Sesión inválida'));
+  const organizationId = requireEnv('ORGANIZATION_ID');
+  await prisma.expedienteMev.updateMany({
+    where: { organizationId, hasNewMovements: true },
+    data: { hasNewMovements: false },
+  });
+  res.redirect('/');
+});
+
 app.post('/expedientes', requireAuth, async (req, res) => {
   if (!verifyCsrfToken(req)) return res.status(403).type('html').send(errorPage('Sesión inválida'));
   const organizationId = requireEnv('ORGANIZATION_ID');

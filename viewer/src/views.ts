@@ -23,9 +23,14 @@ const THEME_STYLE = `
     --border-strong: #6B6B8D;
     --burgundy-500: #7A2D3A;
     --burgundy-600: #62242E;
+    --teal-50: #EEFAFA;
+    --teal-100: #C8EDED;
+    --teal-200: #91DBDB;
     --teal-500: #2A7B7B;
     --teal-600: #226363;
+    --teal-700: #1A4B4B;
     --teal-400: #3A9E9E;
+    --teal-900: #0A1B1B;
     --badge-error-bg: rgba(122, 45, 58, 0.12);
     --badge-error-fg: #9E4A5A;
     --shadow-sm: 0 1px 3px rgba(26, 26, 46, 0.06);
@@ -42,7 +47,7 @@ const THEME_STYLE = `
     font-size: 15px;
     line-height: 1.625;
   }
-  .wrap { max-width: 1080px; margin: 0 auto; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
   .navbar {
     display: flex; align-items: center; gap: 12px;
     padding: 20px 0; border-bottom: 1px solid var(--border-default);
@@ -61,14 +66,14 @@ const THEME_STYLE = `
   .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0; }
   .top {
     display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;
-    align-items: flex-start; margin-bottom: 28px;
+    align-items: flex-start; margin-bottom: 24px;
   }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
   .btn {
     font-family: 'Outfit', sans-serif; font-weight: 500; font-size: 14px;
     border-radius: 8px; padding: 10px 20px; border: none; cursor: pointer;
-    transition: background-color 150ms;
+    transition: background-color 150ms; display: inline-flex; align-items: center; gap: 6px;
   }
   .btn-primary { background: var(--burgundy-500); color: var(--bg-secondary); }
   .btn-primary:hover { background: var(--burgundy-600); }
@@ -77,45 +82,68 @@ const THEME_STYLE = `
     border: 1px solid var(--border-strong);
   }
   .btn-secondary:hover { background: var(--bg-secondary); }
+  .btn-teal { background: transparent; color: var(--teal-700); border: 1px solid var(--teal-200); }
+  .btn-teal:hover { background: var(--teal-50); }
   .btn-ghost {
     background: transparent; color: var(--text-secondary);
     border: 1px dashed var(--border-strong); cursor: default;
   }
+  .icon-btn {
+    background: transparent; border: 1px solid var(--border-default); border-radius: 6px;
+    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-secondary); padding: 0;
+  }
+  .icon-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+  .icon-btn.danger:hover { background: var(--badge-error-bg); color: var(--badge-error-fg); border-color: var(--badge-error-fg); }
+  .icon-btn.teal:hover { background: var(--teal-50); color: var(--teal-700); border-color: var(--teal-200); }
+  .btn:disabled, .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .card {
     background: var(--bg-tertiary); border: 1px solid var(--border-default);
     border-radius: 12px; padding: 24px; box-shadow: var(--shadow-sm);
   }
-  .card-title { font-size: 18px; font-weight: 500; margin: 0 0 2px; }
+  .card-teal { background: var(--teal-50); border-color: var(--teal-200); }
+  .card-title { font-size: 18px; font-weight: 500; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
   .card-desc { color: var(--text-secondary); font-size: 13px; margin: 0; }
   .card-header {
     display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;
     align-items: flex-start; margin-bottom: 16px;
   }
 
-  input[type="text"], input[type="password"] {
+  input[type="text"], input[type="password"], select {
     background: var(--bg-secondary); border: 1px solid var(--border-default);
     border-radius: 8px; padding: 10px 14px; font-family: 'Outfit', sans-serif;
     font-size: 14px; color: var(--text-primary); width: 100%;
   }
-  input:focus { outline: none; border-color: var(--teal-400); box-shadow: 0 0 0 2px rgba(58, 158, 158, 0.2); }
+  input:focus, select:focus { outline: none; border-color: var(--teal-400); box-shadow: 0 0 0 2px rgba(58, 158, 158, 0.2); }
   input::placeholder { color: var(--text-tertiary); }
   label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
   .field { margin-bottom: 16px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; }
+  .filters input { max-width: 260px; }
+  .filters select { max-width: 220px; }
 
   table { border-collapse: collapse; width: 100%; }
   thead th {
     text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--text-secondary);
     border-bottom: 1px solid var(--border-default); padding: 10px 8px;
+    white-space: nowrap;
   }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text-primary); }
+  th.sortable .arrow { opacity: 0.4; margin-left: 3px; }
+  th.sortable.active .arrow { opacity: 1; color: var(--teal-600); }
   tbody td { padding: 12px 8px; font-size: 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
   tbody tr:hover { background: var(--bg-secondary); }
+  tbody tr.is-new { background: var(--teal-50); }
+  tbody tr.is-new:hover { background: var(--teal-100); }
+  .actions-cell { display: flex; justify-content: flex-end; gap: 6px; white-space: nowrap; }
 
-  .badge {
-    background: var(--badge-error-bg); color: var(--badge-error-fg);
-    border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600;
-    margin-left: 6px; white-space: nowrap;
+  .badge-new {
+    display: inline-block; margin-top: 4px;
+    background: var(--teal-100); color: var(--teal-700);
+    border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;
   }
   .muted { color: var(--text-secondary); font-size: 13px; }
   .error { color: var(--burgundy-500); font-size: 14px; }
@@ -164,6 +192,11 @@ function logoSvg(size = 28): string {
   </svg>`;
 }
 
+const ICON_EXTERNAL = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_CHECK = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M3 8.5l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_TRASH = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M2.5 4.5h11M6 4.5V3a1 1 0 011-1h2a1 1 0 011 1v1.5M4.5 4.5l.6 8a1 1 0 001 .9h3.8a1 1 0 001-.9l.6-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_REFRESH = `<svg viewBox="0 0 16 16" width="16" height="16" fill="none"><path d="M13 4.5A5.5 5.5 0 103 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13 2v3h-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 export function loginPage(opts: { csrfToken: string; error?: string }): string {
   return layout(
     'MEV — Themis',
@@ -171,14 +204,14 @@ export function loginPage(opts: { csrfToken: string; error?: string }): string {
     <div class="navbar">${logoSvg(24)}<span class="wordmark">Themis</span></div>
     <div class="card center" style="max-width:380px;margin:60px auto;">
       <div class="center" style="margin-bottom:20px;">${logoSvg(40)}</div>
-      <h2 class="card-title" style="text-align:center;">MEV</h2>
+      <h2 class="card-title" style="justify-content:center;">MEV</h2>
       <p class="card-desc" style="text-align:center;margin-bottom:20px;">Seguimiento automático de expedientes</p>
       ${opts.error ? `<p class="error">${escapeHtml(opts.error)}</p>` : ''}
       <form method="post" action="/login">
         <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
         <div class="field"><input type="text" name="username" placeholder="Usuario" autocomplete="username" required /></div>
         <div class="field"><input type="password" name="password" placeholder="Contraseña" autocomplete="current-password" required /></div>
-        <button type="submit" class="btn btn-primary" style="width:100%;">Entrar</button>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Entrar</button>
       </form>
     </div>
     `,
@@ -190,6 +223,7 @@ type ExpedienteRow = {
   numeroExpediente: string;
   caratula: string;
   jurisdiccion: string | null;
+  mevUrl: string | null;
   fechaUltimoMovimiento: Date | null;
   tituloUltimoMovimiento: string | null;
   hasNewMovements: boolean;
@@ -201,34 +235,91 @@ function fmt(d: Date | null): string {
   return new Date(d).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 }
 
+function openMevBtn(mevUrl: string | null): string {
+  if (!mevUrl) return '';
+  return `<a class="icon-btn" href="${escapeHtml(mevUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir en MEV">${ICON_EXTERNAL}</a>`;
+}
+
 export function dashboardPage(opts: {
   csrfToken: string;
   expedientes: ExpedienteRow[];
   cronSchedule: string;
 }): string {
+  const newMovements = opts.expedientes.filter((e) => e.hasNewMovements);
+  const jurisdicciones = Array.from(new Set(opts.expedientes.map((e) => e.jurisdiccion).filter((j): j is string => !!j))).sort();
+
+  const newMovementsBanner = newMovements.length
+    ? `
+    <div class="card card-teal" style="margin-bottom:24px;">
+      <div class="card-header">
+        <div>
+          <p class="card-title" style="color:var(--teal-700);">${ICON_REFRESH} Nuevos movimientos (${newMovements.length})</p>
+          <p class="card-desc">Expedientes con actualizaciones detectadas en el último chequeo</p>
+        </div>
+        <form method="post" action="/expedientes/marcar-todos-vistos">
+          <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
+          <button type="submit" class="btn btn-teal">${ICON_CHECK} Marcar todo como leído</button>
+        </form>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Nro expediente</th><th>Jurisdicción</th><th>Carátula</th><th>Último movimiento</th><th>Título</th><th></th></tr></thead>
+          <tbody>
+            ${newMovements
+              .map(
+                (e) => `
+              <tr>
+                <td>${escapeHtml(e.numeroExpediente)}</td>
+                <td>${escapeHtml(e.jurisdiccion || '-')}</td>
+                <td>${escapeHtml(e.caratula)}</td>
+                <td style="font-weight:600;color:var(--teal-700);">${fmt(e.fechaUltimoMovimiento)}</td>
+                <td>${escapeHtml(e.tituloUltimoMovimiento || '-')}</td>
+                <td>
+                  <div class="actions-cell">
+                    ${openMevBtn(e.mevUrl)}
+                    <form method="post" action="/expedientes/${e.id}/marcar-visto">
+                      <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
+                      <button type="submit" class="icon-btn teal" title="Marcar como visto">${ICON_CHECK}</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>`,
+              )
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`
+    : '';
+
   const rows = opts.expedientes
     .map(
       (e) => `
-      <tr>
-        <td>${escapeHtml(e.numeroExpediente)}${e.hasNewMovements ? '<span class="badge">nuevo</span>' : ''}</td>
+      <tr class="${e.hasNewMovements ? 'is-new' : ''}" data-jurisdiccion="${escapeHtml(e.jurisdiccion || '')}">
+        <td data-value="${escapeHtml(e.numeroExpediente)}">${escapeHtml(e.numeroExpediente)}${e.hasNewMovements ? '<span class="badge-new">Nuevo</span>' : ''}</td>
         <td>${escapeHtml(e.jurisdiccion || '-')}</td>
-        <td>${escapeHtml(e.caratula)}</td>
-        <td>${fmt(e.fechaUltimoMovimiento)}</td>
+        <td data-value="${escapeHtml(e.caratula)}">${escapeHtml(e.caratula)}</td>
+        <td data-value="${e.fechaUltimoMovimiento ? e.fechaUltimoMovimiento.toISOString() : ''}">${fmt(e.fechaUltimoMovimiento)}</td>
         <td>${escapeHtml(e.tituloUltimoMovimiento || '-')}</td>
-        <td>${fmt(e.lastCheckedAt)}</td>
+        <td data-value="${e.lastCheckedAt ? e.lastCheckedAt.toISOString() : ''}">${fmt(e.lastCheckedAt)}</td>
         <td>
-          ${e.hasNewMovements ? `<form method="post" action="/expedientes/${e.id}/marcar-visto" style="display:inline;">
+          <div class="actions-cell">
+            ${e.hasNewMovements ? `<form method="post" action="/expedientes/${e.id}/marcar-visto">
+                <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
+                <button type="submit" class="icon-btn teal" title="Marcar como visto">${ICON_CHECK}</button>
+              </form>` : ''}
+            ${openMevBtn(e.mevUrl)}
+            <form method="post" action="/expedientes/${e.id}/eliminar" class="js-confirm-delete">
               <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
-              <button type="submit" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">Marcar visto</button>
-            </form>` : ''}
-          <form method="post" action="/expedientes/${e.id}/eliminar" style="display:inline;" class="js-confirm-delete">
-            <input type="hidden" name="_csrf" value="${escapeHtml(opts.csrfToken)}" />
-            <button type="submit" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">Eliminar</button>
-          </form>
+              <button type="submit" class="icon-btn danger" title="Eliminar">${ICON_TRASH}</button>
+            </form>
+          </div>
         </td>
       </tr>`,
     )
     .join('');
+
+  const jurisdiccionOptions = jurisdicciones.map((j) => `<option value="${escapeHtml(j)}">${escapeHtml(j)}</option>`).join('');
 
   return layout(
     'MEV — Themis',
@@ -249,9 +340,11 @@ export function dashboardPage(opts: {
       <div class="actions">
         <button type="button" class="btn btn-ghost" title="El horario se configura desde Railway">Chequeo automático · ${escapeHtml(opts.cronSchedule)}</button>
         <button type="button" class="btn btn-secondary" id="open-add-dialog">+ Agregar expediente</button>
-        <button type="button" class="btn btn-primary" id="refresh-btn">↻ Actualizar desde MEV</button>
+        <button type="button" class="btn btn-primary" id="refresh-btn">${ICON_REFRESH} Actualizar desde MEV</button>
       </div>
     </div>
+
+    ${newMovementsBanner}
 
     <div class="card">
       <div class="card-header">
@@ -259,11 +352,27 @@ export function dashboardPage(opts: {
           <p class="card-title" style="margin:0;">Expedientes guardados</p>
           <p class="card-desc">Se actualizan con "Actualizar desde MEV" o solos, todos los días</p>
         </div>
-        <input type="text" id="filter-input" placeholder="Filtrar por carátula o número..." style="max-width:280px;" />
+        <div class="filters">
+          <input type="text" id="filter-input" placeholder="Filtrar por carátula o número..." />
+          <select id="filter-jurisdiccion">
+            <option value="">Todas las jurisdicciones</option>
+            ${jurisdiccionOptions}
+          </select>
+        </div>
       </div>
       <div style="overflow-x:auto;">
         <table id="exp-table">
-          <thead><tr><th>Expediente</th><th>Jurisdicción</th><th>Carátula</th><th>Último movimiento</th><th>Detalle</th><th>Último chequeo</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="0">Expediente <span class="arrow">↕</span></th>
+              <th>Jurisdicción</th>
+              <th class="sortable" data-sort="2">Carátula <span class="arrow">↕</span></th>
+              <th class="sortable" data-sort="3">Último movimiento <span class="arrow">↕</span></th>
+              <th>Detalle</th>
+              <th class="sortable" data-sort="5">Último chequeo <span class="arrow">↕</span></th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>${rows || '<tr><td colspan="7" class="muted">No hay expedientes cargados todavía.</td></tr>'}</tbody>
         </table>
       </div>
