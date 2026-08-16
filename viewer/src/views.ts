@@ -444,7 +444,7 @@ export function dashboardPage(opts: {
         <p class="dialog-title">Buscar expediente en MEV</p>
         <p class="card-desc" id="refresh-status">Conectando con MEV...</p>
         <div class="spinner" id="refresh-spinner"></div>
-        <p class="muted" id="refresh-detail">Este proceso puede tardar unos minutos.</p>
+        <p class="muted" id="refresh-detail">Revisando los expedientes en MEV, tarda unos segundos.</p>
         <div class="dialog-actions" id="refresh-close-wrap" style="display:none;">
           <button type="button" class="btn btn-primary" id="refresh-view-results">Ver resultados</button>
         </div>

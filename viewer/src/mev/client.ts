@@ -15,6 +15,10 @@
  *     Decodificar como UTF-8 rompe todas las ñ y tildes.
  *  3. La hora va sin cero a la izquierda: "10/08/2026 8:44:55" (ver parser).
  *  4. El HTML está malformado y tiene tablas anidadas (ver parser).
+ *
+ * NOTA: es copia de cron/src/mev-http-client.ts. Los dos servicios se buildean con
+ * root directories distintos (/cron y /viewer) y no pueden compartir una carpeta
+ * común sin reestructurar los Dockerfiles. Si tocás uno, tocá el otro.
  */
 
 const BASE = 'https://mev.scba.gov.ar/';
@@ -151,6 +155,46 @@ export class MevHttpClient {
     }
     if (res.status >= 500) throw new Error(`MEV respondió HTTP ${res.status}`);
     return this.decode(res);
+  }
+
+  /** GET de una página relativa a MEV, asegurando sesión. Para el flujo de búsqueda. */
+  async getPagina(path: string): Promise<string> {
+    if (!this.loggedIn) await this.login();
+    let html = await this.get(BASE + path.replace(/^\//, ''));
+    if (esPaginaDeLogin(html)) {
+      await this.login();
+      html = await this.get(BASE + path.replace(/^\//, ''));
+    }
+    return html;
+  }
+
+  /**
+   * POST de un formulario de MEV (los selects de departamento/juzgado y la búsqueda
+   * son forms clásicos). Sigue el redirect resultante y reintenta si la sesión venció.
+   */
+  async postFormulario(path: string, campos: Record<string, string>): Promise<string> {
+    if (!this.loggedIn) await this.login();
+    const url = BASE + path.replace(/^\//, '');
+
+    const enviar = async () => {
+      const res = await this.raw(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: url },
+        body: new URLSearchParams(campos).toString(),
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get('location');
+        if (loc) return this.follow(loc.startsWith('http') ? loc : BASE + loc.replace(/^\//, ''));
+      }
+      return this.decode(res);
+    };
+
+    let html = await enviar();
+    if (esPaginaDeLogin(html)) {
+      await this.login();
+      html = await enviar();
+    }
+    return html;
   }
 }
 

@@ -1,37 +1,51 @@
-function baseUrl(): string {
-  return requireEnv('MEV_SEARCH_URL').replace(/\/$/, '');
-}
+import { MevSearchSession } from './mev/search';
 
-function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${requireEnv('MEV_SEARCH_TOKEN')}` };
-}
-
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, { headers: authHeaders() });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(body?.error || `mev-search respondió ${res.status}`);
-  }
-  return body as T;
-}
-
-export async function fetchDepartamentos(): Promise<string[]> {
-  const body = await get<{ departamentos: string[] }>('/departamentos');
-  return body.departamentos || [];
-}
-
-export async function fetchJuzgados(departamento: string): Promise<string[]> {
-  const body = await get<{ juzgados: string[] }>(`/juzgados?departamento=${encodeURIComponent(departamento)}`);
-  return body.juzgados || [];
-}
+/**
+ * Búsqueda de expedientes en MEV.
+ *
+ * Antes esto era un proxy HTTP al servicio mev-search (Python + Selenium + Chromium):
+ * ~11s para traer los juzgados y ~43s para una búsqueda, más el cold start del sleep.
+ * Ahora corre en proceso por HTTP: ~100ms y ~3s respectivamente. mev-search quedó sin uso.
+ */
 
 export type MevSearchResult = { caratula: string; url: string; numeroExpediente?: string };
 
+/**
+ * Se cachea la sesión entre requests del mismo usuario: el wizard hace 3 llamadas
+ * seguidas (departamentos -> juzgados -> buscar) y reloguear en cada una es
+ * desperdicio, además de castigar al servidor de MEV.
+ */
+let sesion: { s: MevSearchSession; creada: number } | null = null;
+const VIDA_SESION_MS = 10 * 60 * 1000;
+
+function obtenerSesion(): MevSearchSession {
+  const ahora = Date.now();
+  if (!sesion || ahora - sesion.creada > VIDA_SESION_MS) {
+    sesion = { s: new MevSearchSession(requireEnv('MEV_USERNAME'), requireEnv('MEV_PASSWORD')), creada: ahora };
+  }
+  return sesion.s;
+}
+
+/** Si MEV cortó la sesión, se descarta y se reintenta una vez con una nueva. */
+async function conReintento<T>(fn: (s: MevSearchSession) => Promise<T>): Promise<T> {
+  try {
+    return await fn(obtenerSesion());
+  } catch (e) {
+    sesion = null;
+    return fn(obtenerSesion());
+  }
+}
+
+export async function fetchDepartamentos(): Promise<string[]> {
+  return conReintento((s) => s.departamentos());
+}
+
+export async function fetchJuzgados(departamento: string): Promise<string[]> {
+  return conReintento((s) => s.juzgados(departamento));
+}
+
 export async function search(departamento: string, juzgado: string, query: string): Promise<MevSearchResult[]> {
-  const body = await get<{ results: MevSearchResult[] }>(
-    `/search?departamento=${encodeURIComponent(departamento)}&juzgado=${encodeURIComponent(juzgado)}&query=${encodeURIComponent(query)}`,
-  );
-  return body.results || [];
+  return conReintento((s) => s.buscar(departamento, juzgado, query));
 }
 
 function requireEnv(name: string): string {

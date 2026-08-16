@@ -222,7 +222,7 @@
       closeWrap.style.display = 'none';
       spinner.style.display = 'block';
       status.textContent = 'Conectando con MEV...';
-      detail.textContent = 'Este proceso puede tardar unos minutos.';
+      detail.textContent = 'Revisando los expedientes en MEV, tarda unos segundos.';
       dialog.showModal();
 
       let res;
@@ -249,17 +249,17 @@
         return;
       }
 
-      status.textContent = 'Revisando expedientes en MEV...';
-      const poll = setInterval(async () => {
-        const s = await fetch('/trigger-status').then((r) => r.json());
-        if (s.done) {
-          clearInterval(poll);
-          spinner.style.display = 'none';
-          status.textContent = 'Listo';
-          detail.textContent = 'Se actualizaron los expedientes.';
-          closeWrap.style.display = 'flex';
-        }
-      }, 15000);
+      // El chequeo corre en el propio viewer y tarda ~10s, así que la respuesta
+      // ya trae el resultado: no hace falta hacer polling.
+      const r = await res.json();
+      spinner.style.display = 'none';
+      status.textContent = 'Listo';
+      const partes = [`${r.chequeados} expediente(s) revisados en ${(r.ms / 1000).toFixed(1)}s`];
+      if (r.conNovedades > 0) partes.push(`${r.conNovedades} con movimientos nuevos`);
+      else partes.push('sin movimientos nuevos');
+      if (r.problemas > 0) partes.push(`${r.problemas} no se pudieron leer`);
+      detail.textContent = partes.join(' · ');
+      closeWrap.style.display = 'flex';
     });
   }
 

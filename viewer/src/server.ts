@@ -16,14 +16,13 @@ import {
   verifyCsrfToken,
 } from './auth';
 import { loginPage, dashboardPage, errorPage } from './views';
-import { triggerMevCronNow } from './railway';
 import { fetchDepartamentos, fetchJuzgados, search as searchMev } from './mevSearch';
+import { refrescarDesdeMev } from './refrescar';
 
 const prisma = new PrismaClient();
 const app = express();
 
 const CRON_LABEL = process.env.CRON_LABEL || '9:00 AM';
-let lastTriggeredAt: Date | null = null;
 
 // Railway está delante de un proxy TLS — sin esto, `cookie.secure` rechazaría todo.
 app.set('trust proxy', 1);
@@ -217,28 +216,21 @@ app.post('/expedientes/:id/eliminar', requireAuth, async (req, res) => {
   res.redirect('/');
 });
 
+/**
+ * Chequeo a demanda. Corre acá mismo (sin Chromium tarda ~10s), así que responde
+ * de forma sincrónica: no hace falta disparar otro servicio ni hacer polling.
+ */
 app.post('/trigger', requireAuth, async (req, res) => {
   if (!verifyCsrfToken(req)) return res.status(403).json({ error: 'Sesión inválida' });
-  try {
-    lastTriggeredAt = new Date();
-    await triggerMevCronNow();
-    res.json({ ok: true });
-  } catch (err) {
-    lastTriggeredAt = null;
-    res.status(502).json({ error: err instanceof Error ? err.message : 'Error al disparar el chequeo' });
-  }
-});
-
-app.get('/trigger-status', requireAuth, async (_req, res) => {
-  if (!lastTriggeredAt) return res.json({ done: true });
   const organizationId = requireEnv('ORGANIZATION_ID');
-  const latest = await prisma.expedienteMev.aggregate({
-    where: { organizationId },
-    _max: { lastCheckedAt: true },
-  });
-  const done = !!latest._max.lastCheckedAt && latest._max.lastCheckedAt > lastTriggeredAt;
-  if (done) lastTriggeredAt = null;
-  res.json({ done });
+  try {
+    const r = await refrescarDesdeMev(prisma, organizationId);
+    console.log(`[trigger] ${r.chequeados} chequeados en ${(r.ms / 1000).toFixed(1)}s, ${r.conNovedades} con novedades, ${r.problemas} con problemas.`);
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    console.error('[trigger] Falló el chequeo:', err);
+    res.status(502).json({ error: err instanceof Error ? err.message : 'Error al chequear MEV' });
+  }
 });
 
 app.get('/health', (_req, res) => res.status(200).send('ok'));
