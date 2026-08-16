@@ -105,7 +105,13 @@ export async function enviarAlertaVerificacion(
   const fromName = process.env.RESEND_FROM_NAME || 'MEV Monitor';
   // Por defecto va al mismo destinatario, pero se puede separar con VERIFY_EMAIL.
   const to = process.env.VERIFY_EMAIL || process.env.NOTIFY_EMAIL;
-  if (!apiKey || !from || !to) return;
+
+  // Con las notificaciones desactivadas no hay destinatario: las discrepancias y
+  // los fallos quedan sólo en los logs de Railway (ya se imprimen antes de llamar acá).
+  if (!apiKey || !from || !to) {
+    console.log('[verificacion] Mail desactivado, el detalle queda en los logs.');
+    return;
+  }
 
   const filas = discrepancias
     .map(

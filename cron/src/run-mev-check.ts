@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { checkExpedientes, type MevScrapeResult } from './mev-runner';
 import { checkExpedientesHttp } from './mev-http-check';
 import { compararResultados, enviarAlertaVerificacion } from './verificacion';
-import { sendMovementsEmail, sendWeeklyDigestEmail } from './resend';
+import { sendMovementsEmail, sendWeeklyDigestEmail, emailHabilitado } from './resend';
 
 /**
  * Entrypoint standalone para el Railway Cron Job.
@@ -96,7 +96,7 @@ async function main() {
       console.log(`[mev-check] Mail enviado a ${process.env.NOTIFY_EMAIL}.`);
     }
 
-    if (isMondayInArgentina()) {
+    if (isMondayInArgentina() && emailHabilitado()) {
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const weekly = await prisma.expedienteMev.findMany({
         where: { organizationId, fechaUltimoMovimiento: { gte: sevenDaysAgo } },
