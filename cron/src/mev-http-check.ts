@@ -116,8 +116,8 @@ export async function checkExpedientesHttp(
   const problemas: ProblemaExpediente[] = [];
   if (expedientes.length === 0) return { resultados, problemas };
 
-  const concurrencia = Math.max(1, Math.min(opts.concurrencia ?? 2, 4));
-  const throttleMs = opts.throttleMs ?? 200;
+  const concurrencia = Math.max(1, Math.min(opts.concurrencia ?? 4, 6));
+  const throttleMs = opts.throttleMs ?? 100;
 
   // Una sesión por worker: compartir una sola sesión ASP entre requests
   // concurrentes es lo que hace que devuelva vistas cruzadas.
