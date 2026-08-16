@@ -146,7 +146,9 @@
       wizardResults.innerHTML = '<p class="error">Ingresá al menos 3 caracteres</p>';
       return;
     }
-    wizardResults.innerHTML = '<div class="spinner"></div>';
+    // La búsqueda de MEV tarda ~30-45s desde el servidor; avisar para que no
+    // parezca que se colgó.
+    wizardResults.innerHTML = '<div class="spinner"></div><p class="muted" style="text-align:center;">Buscando en MEV… puede tardar hasta un minuto.</p>';
     try {
       const res = await fetch(
         '/mev/search?departamento=' + encodeURIComponent(departamento) +

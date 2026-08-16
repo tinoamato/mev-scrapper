@@ -147,8 +147,8 @@ export class MevHttpClient {
     throw ultimoError instanceof Error ? ultimoError : new Error(String(ultimoError));
   }
 
-  private async get(url: string): Promise<string> {
-    const res = await this.raw(url);
+  private async get(url: string, timeoutMs = 30000): Promise<string> {
+    const res = await this.raw(url, {}, timeoutMs);
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get('location');
       if (loc) return this.follow(loc.startsWith('http') ? loc : BASE + loc.replace(/^\//, ''));
@@ -158,12 +158,12 @@ export class MevHttpClient {
   }
 
   /** GET de una página relativa a MEV, asegurando sesión. Para el flujo de búsqueda. */
-  async getPagina(path: string): Promise<string> {
+  async getPagina(path: string, timeoutMs = 60000): Promise<string> {
     if (!this.loggedIn) await this.login();
-    let html = await this.get(BASE + path.replace(/^\//, ''));
+    let html = await this.get(BASE + path.replace(/^\//, ''), timeoutMs);
     if (esPaginaDeLogin(html)) {
       await this.login();
-      html = await this.get(BASE + path.replace(/^\//, ''));
+      html = await this.get(BASE + path.replace(/^\//, ''), timeoutMs);
     }
     return html;
   }
@@ -171,8 +171,13 @@ export class MevHttpClient {
   /**
    * POST de un formulario de MEV (los selects de departamento/juzgado y la búsqueda
    * son forms clásicos). Sigue el redirect resultante y reintenta si la sesión venció.
+   *
+   * timeoutMs alto por defecto: la búsqueda por carátula de MEV tarda ~30-45s cuando
+   * se la consulta desde Railway (medido: 43s con Selenium, ~33s por HTTP). Desde una
+   * conexión argentina son ~3s, así que es latencia de red/geo del lado de MEV y no
+   * algo que se arregle del lado nuestro.
    */
-  async postFormulario(path: string, campos: Record<string, string>): Promise<string> {
+  async postFormulario(path: string, campos: Record<string, string>, timeoutMs = 120000): Promise<string> {
     if (!this.loggedIn) await this.login();
     const url = BASE + path.replace(/^\//, '');
 
@@ -181,7 +186,7 @@ export class MevHttpClient {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: url },
         body: new URLSearchParams(campos).toString(),
-      });
+      }, timeoutMs);
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get('location');
         if (loc) return this.follow(loc.startsWith('http') ? loc : BASE + loc.replace(/^\//, ''));
