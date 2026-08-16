@@ -141,13 +141,38 @@ async function obtenerResultados(
 
   if (modo === 'http') {
     const t0 = Date.now();
-    const { resultados, problemas } = await checkExpedientesHttp(username, password, entrada);
-    console.log(`[mev-check] HTTP: ${resultados.length} leídos en ${((Date.now() - t0) / 1000).toFixed(1)}s.`);
-    if (problemas.length) {
-      console.warn(`[mev-check] ${problemas.length} expediente(s) con problemas:`);
-      for (const p of problemas) console.warn(`  - ${p.numeroExpediente}: ${p.motivo}${p.detalle ? ` (${p.detalle})` : ''}`);
+    try {
+      const { resultados, problemas } = await checkExpedientesHttp(username, password, entrada);
+
+      // Si el método nuevo no leyó NADA teniendo expedientes que leer, algo cambió
+      // en MEV: mejor caer a Selenium que reportar un día sin novedades falso.
+      if (resultados.length === 0 && entrada.some((e) => e.url)) {
+        throw new Error('el método HTTP no devolvió ningún resultado');
+      }
+
+      console.log(`[mev-check] HTTP: ${resultados.length} leídos en ${((Date.now() - t0) / 1000).toFixed(1)}s.`);
+      if (problemas.length) {
+        console.warn(`[mev-check] ${problemas.length} expediente(s) con problemas:`);
+        for (const p of problemas) console.warn(`  - ${p.numeroExpediente}: ${p.motivo}${p.detalle ? ` (${p.detalle})` : ''}`);
+      }
+      return resultados;
+    } catch (e) {
+      // Chromium sigue en esta imagen, así que el respaldo no cuesta nada tenerlo:
+      // sólo se ejecuta si el camino rápido falla.
+      console.error('[mev-check] El método HTTP falló, cayendo a Selenium:', e);
+      const resultados = await checkExpedientes(username, password, entrada);
+      console.log(`[mev-check] Selenium (respaldo): ${resultados.length} leídos.`);
+      try {
+        await enviarAlertaVerificacion(
+          [],
+          [{ id: '-', numeroExpediente: '(todos)', motivo: 'error', detalle: e instanceof Error ? e.message : String(e) }],
+          { totalExpedientes: entrada.length, msSelenium: 0, msHttp: Date.now() - t0 },
+        );
+      } catch {
+        /* si tampoco se puede avisar, ya quedó en los logs */
+      }
+      return resultados;
     }
-    return resultados;
   }
 
   // modo verify
